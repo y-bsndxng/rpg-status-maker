@@ -1,60 +1,122 @@
-import './style.css'
-import typescriptLogo from './assets/typescript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.ts'
+import "./style.css";
+import { generateCharacter } from "./generator";
+import { downloadCanvasAsPng, loadImageFromFile } from "./image";
+import { renderCard, renderPlaceholder } from "./renderer";
+import type { CharacterCard } from "./types";
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const app = document.querySelector<HTMLDivElement>("#app");
 
-<div class="ticks"></div>
+if (!app) {
+  throw new Error("#app が見つかりません。");
+}
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+app.innerHTML = `
+  <main class="page">
+    <section class="hero">
+      <p class="eyebrow">Funny Image Generator</p>
+      <h1>RPG Status Maker</h1>
+      <p class="description">
+        画像をアップロードすると、RPGのキャラクターカード風に加工できます。
+      </p>
+    </section>
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+    <section class="controls">
+      <label class="file-label">
+        <span>画像を選択</span>
+        <input id="imageInput" type="file" accept="image/*" />
+      </label>
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+      <button id="generateButton" type="button" disabled>
+        ステータス再生成
+      </button>
+
+      <button id="downloadButton" type="button" disabled>
+        PNG保存
+      </button>
+    </section>
+
+    <p id="message" class="message">
+      まずは画像を選択してください。
+    </p>
+
+    <section class="preview">
+      <canvas id="cardCanvas" aria-label="RPG status card preview"></canvas>
+    </section>
+  </main>
+`;
+
+const imageInput = document.querySelector<HTMLInputElement>("#imageInput");
+const generateButton = document.querySelector<HTMLButtonElement>("#generateButton");
+const downloadButton = document.querySelector<HTMLButtonElement>("#downloadButton");
+const message = document.querySelector<HTMLParagraphElement>("#message");
+const canvas = document.querySelector<HTMLCanvasElement>("#cardCanvas");
+
+if (!imageInput || !generateButton || !downloadButton || !message || !canvas) {
+  throw new Error("必要なHTML要素が見つかりません。");
+}
+
+let loadedImage: HTMLImageElement | null = null;
+let currentCard: CharacterCard | null = null;
+
+renderPlaceholder(canvas);
+
+imageInput.addEventListener("change", async () => {
+  const file = imageInput.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.startsWith("image/")) {
+    setMessage("画像ファイルを選択してください。");
+    return;
+  }
+
+  try {
+    setMessage("画像を読み込み中です...");
+
+    loadedImage = await loadImageFromFile(file);
+    currentCard = generateCharacter();
+
+    renderCard(canvas, loadedImage, currentCard);
+
+    generateButton.disabled = false;
+    downloadButton.disabled = false;
+
+    setMessage("カードを生成しました。気に入らなければ再生成できます。");
+  } catch (error) {
+    console.error(error);
+    setMessage("画像の読み込みに失敗しました。別の画像で試してください。");
+  }
+});
+
+generateButton.addEventListener("click", () => {
+  if (!loadedImage) {
+    setMessage("先に画像を選択してください。");
+    return;
+  }
+
+  currentCard = generateCharacter();
+  renderCard(canvas, loadedImage, currentCard);
+
+  setMessage("ステータスを再生成しました。");
+});
+
+downloadButton.addEventListener("click", () => {
+  if (!currentCard) {
+    setMessage("先にカードを生成してください。");
+    return;
+  }
+
+  const timestamp = new Date()
+    .toISOString()
+    .replaceAll(":", "-")
+    .replaceAll(".", "-");
+
+  downloadCanvasAsPng(canvas, `rpg-status-card-${timestamp}.png`);
+  setMessage("PNGとして保存しました。");
+});
+
+function setMessage(text: string): void {
+  message.textContent = text;
+}
