@@ -118,5 +118,7 @@ downloadButton.addEventListener("click", () => {
 });
 
 function setMessage(text: string): void {
-  message.textContent = text;
+  if (message != null) {
+    message.textContent = text;
+  }
 }
